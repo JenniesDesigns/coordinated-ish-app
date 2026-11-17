@@ -3521,10 +3521,11 @@ document.querySelectorAll(".cc-password-eye").forEach(button => {
 });
 
 // Password recovery: use the existing Supabase REST client and hosted app URL.
-const CC_RECOVERY_URL = "https://jenniesdesigns.github.io/chaos-coordinator-/";
+const CC_RECOVERY_URL = "https://app.coordinated-ish.com/";
 const forgotPasswordBtn = document.getElementById("forgotPasswordBtn");
 const resetPasswordForm = document.getElementById("resetPasswordForm");
 let ccRecoveryToken = null;
+let ccPasswordLinkType = "recovery";
 
 forgotPasswordBtn.addEventListener("click", async () => {
   const email = document.getElementById("authEmail").value.trim();
@@ -3551,13 +3552,29 @@ forgotPasswordBtn.addEventListener("click", async () => {
 async function ccHandleRecoveryLink() {
   const fragment = new URLSearchParams(location.hash.slice(1));
   const query = new URLSearchParams(location.search);
-  const isRecovery = fragment.get("type") === "recovery" || query.get("type") === "recovery";
+  const linkType = fragment.get("type") || query.get("type");
+  const isRecovery = linkType === "recovery" || linkType === "invite";
   if (!isRecovery) return false;
   // Clear URL tokens immediately; never leave credentials in browser history.
   history.replaceState(null, "", location.pathname);
-  const token = fragment.get("access_token");
+  let token = fragment.get("access_token");
+  if (!token && query.get("token_hash")) {
+    try {
+      const response = await fetch(SUPABASE_URL + "/auth/v1/verify", {
+        method: "POST",
+        headers: {apikey: SUPABASE_PUBLISHABLE_KEY, "Content-Type": "application/json"},
+        body: JSON.stringify({token_hash: query.get("token_hash"), type: linkType})
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.access_token) throw new Error(data.msg || data.error_description || "This link is invalid or expired.");
+      token = data.access_token;
+    } catch (err) {
+      setAuthMessage("Could not open your invitation or reset link: " + (err.message || String(err)), true);
+      return true;
+    }
+  }
   if (!token) {
-    setAuthMessage("This recovery link is invalid or expired. Request another one.", true);
+    setAuthMessage("This link is invalid or expired. Please request a new one.", true);
     return true;
   }
   try {
@@ -3567,9 +3584,10 @@ async function ccHandleRecoveryLink() {
     });
     if (!response.ok) throw new Error("This recovery link is invalid or expired.");
     ccRecoveryToken = token;
+    ccPasswordLinkType = linkType;
     clearSession();
-    document.getElementById("authHeading").textContent = "Choose a new password.";
-    document.getElementById("authIntro").textContent = "Enter and confirm your new password.";
+    document.getElementById("authHeading").textContent = linkType === "invite" ? "Welcome to the Chaos Crew!" : "Choose a new password.";
+    document.getElementById("authIntro").textContent = linkType === "invite" ? "Your invitation is ready. Choose a password to activate your account." : "Enter and confirm your new password.";
     authForm.style.display = "none";
     resetPasswordForm.style.display = "block";
     setAuthMessage("");
@@ -3608,7 +3626,8 @@ resetPasswordForm.addEventListener("submit", async e => {
     authForm.style.display = "";
     document.getElementById("authHeading").textContent = "Welcome back.";
     document.getElementById("authIntro").textContent = "Sign in to your Coordinated-ish account.";
-    setAuthMessage("Password updated! Please sign in with your new password.");
+    setAuthMessage(ccPasswordLinkType === "invite" ? "Your account is ready! Please sign in with your new password." : "Password updated! Please sign in with your new password.");
+    ccPasswordLinkType = "recovery";
   } catch (err) {
     setAuthMessage("Password reset failed: " + (err.message || String(err)), true);
   } finally {
@@ -3618,6 +3637,10 @@ resetPasswordForm.addEventListener("submit", async e => {
 
 authForm.addEventListener("submit",e=>{e.preventDefault();doSignIn();});
 createSubmit.addEventListener("click",e=>{e.preventDefault();doCreateAccount();});
+// Invitation-only beta: public signup is disabled in Supabase and is not advertised here.
+createSubmit.hidden = true;
+createSubmit.style.display = "none";
+authSubmit.parentElement.style.gridTemplateColumns = "1fr";
 
 
 // v15.8.11 — Supabase-backed dashboard reminders (separate from Calendar).
@@ -3815,7 +3838,8 @@ if(mealMobileToggle)mealMobileToggle.addEventListener("click",()=>{
   mealMobileToggle.setAttribute("aria-expanded",String(open));
 });
 // Recovery links take precedence over any previously saved session.
-const ccRecoveryPending = location.hash.includes("type=recovery") || new URLSearchParams(location.search).get("type") === "recovery";
+const ccLinkType = new URLSearchParams(location.hash.slice(1)).get("type") || new URLSearchParams(location.search).get("type");
+const ccRecoveryPending = ccLinkType === "recovery" || ccLinkType === "invite";
 if (ccRecoveryPending) {
   ccHandleRecoveryLink();
 } else {
