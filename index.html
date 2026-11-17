@@ -3956,7 +3956,12 @@ renderPlannerExtras();
 #ccFeedbackDialog .cc-feedback-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:18px}
 #ccFeedbackDialog .cc-feedback-actions button{padding:11px 14px;border-radius:10px;border:1px solid var(--line,#555);background:var(--panel2,#222);color:var(--text,#fff);font-weight:750}
 #ccFeedbackDialog .cc-feedback-actions button[type=submit]{background:#76469d;color:white;border-color:#ad82d1}
-#ccFeedbackDialog button:disabled{opacity:.55;cursor:wait}#ccFeedbackStatus{font-size:13px;min-height:18px;margin-top:10px;color:var(--teal,#7fe)}
+#ccFeedbackDialog button:disabled{opacity:.55;cursor:wait}
+#ccFeedbackSuccess[hidden],#ccFeedbackForm[hidden]{display:none!important}
+#ccFeedbackSuccess{padding:20px 8px;text-align:center}
+#ccFeedbackSuccess h3{font-size:20px;margin:0 0 10px;color:var(--teal,#7fe)}
+#ccFeedbackSuccess p{margin:0 0 18px}
+#ccFeedbackDone{background:#76469d;color:white;border:1px solid #ad82d1;border-radius:10px;padding:12px 22px;font-weight:800;min-height:44px}#ccFeedbackStatus{font-size:13px;min-height:18px;margin-top:10px;color:var(--teal,#7fe)}
 @media(max-width:650px){#ccFeedbackFab{right:12px;bottom:calc(78px + env(safe-area-inset-bottom,0px));padding:10px 12px;font-size:12px}#ccFeedbackDialog{padding:17px;max-height:85vh}}
 </style>
 <button type="button" id="ccFeedbackFab" hidden aria-haspopup="dialog" aria-controls="ccFeedbackOverlay" aria-label="Report a Goblin"><span aria-hidden="true">🐈‍⬛</span> Report a Goblin</button>
@@ -3978,6 +3983,11 @@ renderPlannerExtras();
       <div class="cc-feedback-actions"><button type="button" id="ccFeedbackCancel">Cancel</button><button type="submit" id="ccFeedbackSend">Send to Goblin Headquarters</button></div>
       <div id="ccFeedbackStatus" role="status" aria-live="polite"></div>
     </form>
+    <div id="ccFeedbackSuccess" hidden role="status" aria-live="polite" tabindex="-1">
+      <h3>🐈‍⬛ Message delivered to Goblin Headquarters!</h3>
+      <p>Thank you for helping us coordinate the chaos. Sir Bartholomew is reviewing your report between naps. 💜</p>
+      <button type="button" id="ccFeedbackDone">Done</button>
+    </div>
   </section>
 </div>
 <script id="cc-feedback-script">
@@ -3985,9 +3995,11 @@ renderPlannerExtras();
   'use strict';
   const fab=document.getElementById('ccFeedbackFab'), overlay=document.getElementById('ccFeedbackOverlay'), form=document.getElementById('ccFeedbackForm');
   const cancel=document.getElementById('ccFeedbackCancel'),send=document.getElementById('ccFeedbackSend'),status=document.getElementById('ccFeedbackStatus');
+  const success=document.getElementById('ccFeedbackSuccess'),done=document.getElementById('ccFeedbackDone');
   let previousFocus=null;
   function close(){if(send.disabled)return;overlay.hidden=true;status.textContent='';(previousFocus||fab).focus()}
-  fab.addEventListener('click',()=>{if(!currentUser)return;previousFocus=document.activeElement;overlay.hidden=false;status.textContent='';document.getElementById('ccFeedbackType').focus()});
+  fab.addEventListener('click',()=>{if(!currentUser)return;previousFocus=document.activeElement;form.hidden=false;success.hidden=true;overlay.hidden=false;status.textContent='';document.getElementById('ccFeedbackType').focus()});
+  done.addEventListener('click',close);
   cancel.addEventListener('click',close);
   overlay.addEventListener('click',e=>{if(e.target===overlay)close()});
   document.addEventListener('keydown',e=>{if(overlay.hidden)return;if(e.key==='Escape'){e.preventDefault();close()}if(e.key==='Tab'){const els=[...overlay.querySelectorAll('button:not(:disabled),select,textarea,input')].filter(el=>el.offsetParent!==null);if(!els.length)return;const first=els[0],last=els[els.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}});
@@ -4001,8 +4013,7 @@ renderPlannerExtras();
     const payload={user_id:currentUser.id,kind:document.getElementById('ccFeedbackType').value,message,app_section:activeView,allow_contact:document.getElementById('ccFeedbackContact').checked};
     try{
       await supabaseRequest('/rest/v1/beta_feedback',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)});
-      form.reset();status.textContent='Report delivered! Thank you for helping the Goblin. 💜';
-      setTimeout(()=>{if(!send.disabled){overlay.hidden=true;fab.focus()}},1500);
+      form.reset();status.textContent='';form.hidden=true;success.hidden=false;success.focus();
     }catch(err){console.error('Feedback submission failed:',err);status.textContent='Could not send yet. Your message is still here; please try again. ('+(err.message||'Connection error')+')'}
     finally{send.disabled=false;cancel.disabled=false}
   });
