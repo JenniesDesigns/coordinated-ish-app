@@ -3940,5 +3940,73 @@ const originalRenderLiveDashboard=renderLiveDashboard;
 renderLiveDashboard=function(){originalRenderLiveDashboard();renderPlannerExtras()};
 renderPlannerExtras();
 </script>
+
+<!-- Coordinated-ish beta: Report a Goblin (isolated feature) -->
+<style id="cc-feedback-style">
+#ccFeedbackFab{position:fixed;right:20px;bottom:22px;z-index:40;display:flex;align-items:center;gap:9px;padding:12px 17px;border:2px solid #d9b6fa;border-radius:999px;background:#583276;color:#fff;font-weight:800;box-shadow:0 8px 24px #0008;cursor:pointer}
+#ccFeedbackFab:hover,#ccFeedbackFab:focus-visible{background:#75469b;outline-offset:3px}
+#ccFeedbackFab[hidden],#ccFeedbackOverlay[hidden]{display:none!important}
+#ccFeedbackOverlay{position:fixed;inset:0;z-index:11000;background:#080b15c9;display:flex;justify-content:center;align-items:center;padding:16px}
+#ccFeedbackDialog{background:var(--panel,#171a2b);color:var(--text,#fff);border:1px solid var(--purple,#ae83ef);border-radius:20px;padding:22px;width:min(490px,100%);max-height:min(90vh,800px);overflow-y:auto;box-shadow:0 20px 80px #000a}
+#ccFeedbackDialog h2{font-size:22px;margin:0 0 4px}#ccFeedbackDialog p{color:var(--muted,#bbb);margin:0 0 15px}
+#ccFeedbackDialog label{display:block;font-size:14px;font-weight:700;margin:12px 0 5px}
+#ccFeedbackDialog select,#ccFeedbackDialog textarea{display:block;width:100%;background:var(--bg,#101421);border:1px solid var(--line,#555);border-radius:10px;color:var(--text,#fff);padding:12px;font:inherit}
+#ccFeedbackDialog textarea{resize:vertical;min-height:115px}#ccFeedbackDialog .cc-feedback-check{display:flex;align-items:flex-start;gap:9px;font-weight:500}
+#ccFeedbackDialog .cc-feedback-check input{margin-top:4px;flex-shrink:0}
+#ccFeedbackDialog .cc-feedback-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:18px}
+#ccFeedbackDialog .cc-feedback-actions button{padding:11px 14px;border-radius:10px;border:1px solid var(--line,#555);background:var(--panel2,#222);color:var(--text,#fff);font-weight:750}
+#ccFeedbackDialog .cc-feedback-actions button[type=submit]{background:#76469d;color:white;border-color:#ad82d1}
+#ccFeedbackDialog button:disabled{opacity:.55;cursor:wait}#ccFeedbackStatus{font-size:13px;min-height:18px;margin-top:10px;color:var(--teal,#7fe)}
+@media(max-width:650px){#ccFeedbackFab{right:12px;bottom:calc(78px + env(safe-area-inset-bottom,0px));padding:10px 12px;font-size:12px}#ccFeedbackDialog{padding:17px;max-height:85vh}}
+</style>
+<button type="button" id="ccFeedbackFab" hidden aria-haspopup="dialog" aria-controls="ccFeedbackOverlay" aria-label="Report a Goblin"><span aria-hidden="true">🐈‍⬛</span> Report a Goblin</button>
+<div id="ccFeedbackOverlay" hidden>
+  <section id="ccFeedbackDialog" role="dialog" aria-modal="true" aria-labelledby="ccFeedbackTitle">
+    <h2 id="ccFeedbackTitle">🐈‍⬛ Report a Goblin</h2>
+    <p>Bugs, ideas, confusion, and occasional compliments.</p>
+    <form id="ccFeedbackForm">
+      <label for="ccFeedbackType">What's happening?</label>
+      <select id="ccFeedbackType" required>
+        <option value="bug">Something isn't working</option>
+        <option value="confusing">I don't understand something</option>
+        <option value="idea">I have an idea</option>
+        <option value="love">I love this!</option>
+      </select>
+      <label for="ccFeedbackMessage">Tell Goblin Headquarters about it</label>
+      <textarea id="ccFeedbackMessage" required minlength="3" maxlength="2000" placeholder="Tell us in your own words. No technical knowledge needed!"></textarea>
+      <label class="cc-feedback-check"><input type="checkbox" id="ccFeedbackContact"> It's okay to contact me about this.</label>
+      <div class="cc-feedback-actions"><button type="button" id="ccFeedbackCancel">Cancel</button><button type="submit" id="ccFeedbackSend">Send to Goblin Headquarters</button></div>
+      <div id="ccFeedbackStatus" role="status" aria-live="polite"></div>
+    </form>
+  </section>
+</div>
+<script id="cc-feedback-script">
+(function(){
+  'use strict';
+  const fab=document.getElementById('ccFeedbackFab'), overlay=document.getElementById('ccFeedbackOverlay'), form=document.getElementById('ccFeedbackForm');
+  const cancel=document.getElementById('ccFeedbackCancel'),send=document.getElementById('ccFeedbackSend'),status=document.getElementById('ccFeedbackStatus');
+  let previousFocus=null;
+  function close(){if(send.disabled)return;overlay.hidden=true;status.textContent='';(previousFocus||fab).focus()}
+  fab.addEventListener('click',()=>{if(!currentUser)return;previousFocus=document.activeElement;overlay.hidden=false;status.textContent='';document.getElementById('ccFeedbackType').focus()});
+  cancel.addEventListener('click',close);
+  overlay.addEventListener('click',e=>{if(e.target===overlay)close()});
+  document.addEventListener('keydown',e=>{if(overlay.hidden)return;if(e.key==='Escape'){e.preventDefault();close()}if(e.key==='Tab'){const els=[...overlay.querySelectorAll('button:not(:disabled),select,textarea,input')].filter(el=>el.offsetParent!==null);if(!els.length)return;const first=els[0],last=els[els.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}});
+  function syncVisibility(){const signedIn=!!currentUser&&!!accessToken;fab.hidden=!signedIn;if(!signedIn)overlay.hidden=true}
+  syncVisibility();setInterval(syncVisibility,1200);
+  form.addEventListener('submit',async e=>{
+    e.preventDefault();if(!currentUser||!accessToken){status.textContent='Please sign in first.';return}
+    const message=document.getElementById('ccFeedbackMessage').value.trim();if(message.length<3){status.textContent='Please tell us a little more.';return}
+    send.disabled=true;cancel.disabled=true;status.textContent='Sending your report…';
+    const activeView=document.querySelector('.view.active')?.id||'unknown';
+    const payload={user_id:currentUser.id,kind:document.getElementById('ccFeedbackType').value,message,app_section:activeView,allow_contact:document.getElementById('ccFeedbackContact').checked};
+    try{
+      await supabaseRequest('/rest/v1/beta_feedback',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)});
+      form.reset();status.textContent='Report delivered! Thank you for helping the Goblin. 💜';
+      setTimeout(()=>{if(!send.disabled){overlay.hidden=true;fab.focus()}},1500);
+    }catch(err){console.error('Feedback submission failed:',err);status.textContent='Could not send yet. Your message is still here; please try again. ('+(err.message||'Connection error')+')'}
+    finally{send.disabled=false;cancel.disabled=false}
+  });
+})();
+</script>
 </body>
 </html>
